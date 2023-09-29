@@ -26,7 +26,7 @@ import {
 	authenticator,
 	requireAnonymous,
 	sessionKey,
-	signup,
+	signupWithWebauthn,
 } from '#app/utils/auth.server.ts'
 import { redirectWithConfetti } from '#app/utils/confetti.server.ts'
 import { WEBAUTHN_PROVIDER_NAME } from '#app/utils/connections.tsx'
@@ -35,7 +35,6 @@ import { invariant, useIsPending } from '#app/utils/misc.tsx'
 import { authSessionStorage } from '#app/utils/session.server.ts'
 import {
 	NameSchema,
-	PasswordAndConfirmPasswordSchema,
 	UsernameSchema,
 } from '#app/utils/user-validation.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
@@ -43,7 +42,7 @@ import { type VerifyFunctionArgs } from './verify.tsx'
 
 const onboardingEmailSessionKey = 'onboardingEmail'
 
-const SignupFormSchema = z
+const SignupPasskeyFormSchema = z
 	.object({
 		username: UsernameSchema,
 		name: NameSchema,
@@ -54,7 +53,6 @@ const SignupFormSchema = z
 		remember: z.boolean().optional(),
 		redirectTo: z.string().optional(),
 	})
-	.and(PasswordAndConfirmPasswordSchema)
 
 async function requireOnboardingEmail(request: Request) {
 	await requireAnonymous(request)
@@ -88,35 +86,40 @@ export async function loader({ request }: DataFunctionArgs) {
 }
 
 export async function action({ request }: DataFunctionArgs) {
+	const duplicateRequest = request.clone()
 	const email = await requireOnboardingEmail(request)
 	const formData = await request.formData()
-	const submission = await parse(formData, {
-		schema: intent =>
-			SignupFormSchema.superRefine(async (data, ctx) => {
-				const existingUser = await prisma.user.findUnique({
-					where: { username: data.username },
-					select: { id: true },
+	let submission = await parse(formData, {
+		schema: SignupPasskeyFormSchema.superRefine(async (data, ctx) => {
+			const existingUser = await prisma.user.findUnique({
+				where: { username: data.username },
+				select: { id: true },
+			})
+			if (existingUser) {
+				ctx.addIssue({
+					path: ['username'],
+					code: z.ZodIssueCode.custom,
+					message: 'A user already exists with this username',
 				})
-				if (existingUser) {
-					ctx.addIssue({
-						path: ['username'],
-						code: z.ZodIssueCode.custom,
-						message: 'A user already exists with this username',
-					})
-					return
-				}
-			}).transform(async data => {
-				if (intent !== 'submit') return { ...data, session: null }
-
-				const session = await signup({ ...data, email })
-				return { ...data, session }
-			}),
+				return
+			}
+		}).transform(async data => {
+			const session = await signupWithWebauthn({ ...data, email })
+			// we call our Webauthn provider to save the credential
+			await authenticator.authenticate(
+				WEBAUTHN_PROVIDER_NAME,
+				duplicateRequest,
+				{ throwOnError: true, context: { session } },
+			)
+			return { ...data, session }
+		}),
 		async: true,
 	})
 
 	if (submission.intent !== 'submit') {
 		return json({ status: 'idle', submission } as const)
 	}
+
 	if (!submission.value?.session) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
@@ -167,11 +170,16 @@ export default function SignupRoute() {
 
 	const [form, fields] = useForm({
 		id: 'onboarding-form',
-		constraint: getFieldsetConstraint(SignupFormSchema),
+		constraint: getFieldsetConstraint(SignupPasskeyFormSchema),
 		defaultValue: { redirectTo },
 		lastSubmission: actionData?.submission,
 		onValidate({ formData }) {
-			return parse(formData, { schema: SignupFormSchema })
+			const result = parse(formData, { schema: SignupPasskeyFormSchema })
+
+			return result
+		},
+		onSubmit(event) {
+			handleFormSubmit(data, 'registration')(event)
 		},
 		shouldRevalidate: 'onBlur',
 	})
@@ -184,21 +192,16 @@ export default function SignupRoute() {
 					<p className="text-body-md text-muted-foreground">
 						Please enter your details.
 					</p>
-					<Link to="/onboarding/passkey" className="text-sm text-blue-500">Register with a passkey</Link>
+					<Link to="/onboarding" className="text-sm text-blue-500 pb-4">Register with a password</Link>
 				</div>
 				<Spacer size="xs" />
 				<Form
 					method="POST"
 					className="mx-auto min-w-[368px] max-w-sm"
 					{...form.props}
-					onSubmit={async event => {
-						const submitButton = (event as any).nativeEvent.submitter
-						if (submitButton.value === 'registration') {
-							const result = await handleFormSubmit(data, 'registration')(event)
-							return result
-						}
-					}}
 				>
+
+					<input type="hidden" name="email" value={data.email} />
 					<Field
 						labelProps={{ htmlFor: fields.username.id, children: 'Username' }}
 						inputProps={{
@@ -216,26 +219,7 @@ export default function SignupRoute() {
 						}}
 						errors={fields.name.errors}
 					/>
-					<Field
-						labelProps={{ htmlFor: fields.password.id, children: 'Password' }}
-						inputProps={{
-							...conform.input(fields.password, { type: 'password' }),
-							autoComplete: 'new-password',
-						}}
-						errors={fields.password.errors}
-					/>
 
-					<Field
-						labelProps={{
-							htmlFor: fields.confirmPassword.id,
-							children: 'Confirm Password',
-						}}
-						inputProps={{
-							...conform.input(fields.confirmPassword, { type: 'password' }),
-							autoComplete: 'new-password',
-						}}
-						errors={fields.confirmPassword.errors}
-					/>
 
 					<CheckboxField
 						labelProps={{
@@ -266,6 +250,8 @@ export default function SignupRoute() {
 							className="w-full"
 							status={isPending ? 'pending' : actionData?.status ?? 'idle'}
 							type="submit"
+							name="registration"
+							value="registration"
 							disabled={isPending}
 						>
 							Create an account

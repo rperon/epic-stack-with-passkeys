@@ -15,6 +15,8 @@ const schema = z.object({
 	GITHUB_CLIENT_ID: z.string().default('MOCK_GITHUB_CLIENT_ID'),
 	GITHUB_CLIENT_SECRET: z.string().default('MOCK_GITHUB_CLIENT_SECRET'),
 	GITHUB_TOKEN: z.string().default('MOCK_GITHUB_TOKEN'),
+	// If you plan to use WebAuthn, remove the default:
+	WEB_AUTHN_ORIGIN: z.string().default('http://localhost:3000'),
 })
 
 declare global {

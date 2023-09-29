@@ -7,6 +7,7 @@ export default {
 	cacheDirectory: './node_modules/.cache/remix',
 	ignoredRouteFiles: ['**/*'],
 	serverModuleFormat: 'esm',
+	serverDependenciesToBundle: ['remix-auth-webauthn'],
 	serverPlatform: 'node',
 	tailwind: true,
 	postcss: true,

@@ -145,6 +145,32 @@ export async function signup({
 	return session
 }
 
+export async function signupWithWebauthn({
+	email,
+	username,
+	name,
+}: {
+	email: User['email']
+	username: User['username']
+	name: User['name']
+}) {
+	const session = await prisma.session.create({
+		data: {
+			expirationDate: getSessionExpirationDate(),
+			user: {
+				create: {
+					email: email.toLowerCase(),
+					username: username.toLowerCase(),
+					name,
+				},
+			},
+		},
+		select: { id: true, expirationDate: true },
+	})
+
+	return session
+}
+
 export async function signupWithConnection({
 	email,
 	username,

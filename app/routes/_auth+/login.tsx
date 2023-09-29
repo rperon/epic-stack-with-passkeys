@@ -6,7 +6,17 @@ import {
 	type DataFunctionArgs,
 	type MetaFunction,
 } from '@remix-run/node'
-import { Form, Link, useActionData, useSearchParams } from '@remix-run/react'
+import {
+	Form,
+	Link,
+	useActionData,
+	useLoaderData,
+	useSearchParams,
+} from '@remix-run/react'
+import {
+	handleFormSubmit,
+	type WebAuthnOptionsResponse,
+} from 'remix-auth-webauthn'
 import { safeRedirect } from 'remix-utils'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
@@ -15,6 +25,7 @@ import { Spacer } from '#app/components/spacer.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { twoFAVerificationType } from '#app/routes/settings+/profile.two-factor.tsx'
 import {
+	authenticator,
 	getUserId,
 	login,
 	requireAnonymous,
@@ -22,6 +33,7 @@ import {
 } from '#app/utils/auth.server.ts'
 import {
 	ProviderConnectionForm,
+	WEBAUTHN_PROVIDER_NAME,
 	providerNames,
 } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
@@ -189,7 +201,15 @@ const LoginFormSchema = z.object({
 
 export async function loader({ request }: DataFunctionArgs) {
 	await requireAnonymous(request)
-	return json({})
+
+	try {
+		await authenticator.authenticate(WEBAUTHN_PROVIDER_NAME, request)
+	} catch (response) {
+		if (response instanceof Response && response.status === 200) {
+			return response
+		}
+		throw response
+	}
 }
 
 export async function action({ request }: DataFunctionArgs) {
@@ -221,6 +241,7 @@ export async function action({ request }: DataFunctionArgs) {
 		delete submission.value?.password
 		return json({ status: 'idle', submission } as const)
 	}
+
 	if (!submission.value?.session) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
@@ -236,6 +257,7 @@ export async function action({ request }: DataFunctionArgs) {
 }
 
 export default function LoginPage() {
+	const options = useLoaderData<WebAuthnOptionsResponse>()
 	const actionData = useActionData<typeof action>()
 	const isPending = useIsPending()
 	const [searchParams] = useSearchParams()
@@ -328,6 +350,12 @@ export default function LoginPage() {
 										type="Login"
 										providerName={providerName}
 										redirectTo={redirectTo}
+										onSubmit={(e) => {
+											if (providerName === WEBAUTHN_PROVIDER_NAME) {
+												handleFormSubmit(options)(e)
+											}
+										}
+										}
 									/>
 								</li>
 							))}
