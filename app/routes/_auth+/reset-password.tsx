@@ -4,17 +4,16 @@ import {
 	json,
 	redirect,
 	type DataFunctionArgs,
-	type V2_MetaFunction,
+	type MetaFunction,
 } from '@remix-run/node'
 import { Form, useActionData, useLoaderData } from '@remix-run/react'
-import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.tsx'
 import { ErrorList, Field } from '#app/components/forms.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import { requireAnonymous, resetUserPassword } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { invariant, useIsPending } from '#app/utils/misc.tsx'
-import { PasswordSchema } from '#app/utils/user-validation.ts'
+import { PasswordAndConfirmPasswordSchema } from '#app/utils/user-validation.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
 import { type VerifyFunctionArgs } from './verify.tsx'
 
@@ -46,15 +45,7 @@ export async function handleVerification({
 	})
 }
 
-const ResetPasswordSchema = z
-	.object({
-		password: PasswordSchema,
-		confirmPassword: PasswordSchema,
-	})
-	.refine(({ confirmPassword, password }) => password === confirmPassword, {
-		message: 'The passwords did not match',
-		path: ['confirmPassword'],
-	})
+const ResetPasswordSchema = PasswordAndConfirmPasswordSchema
 
 async function requireResetPasswordUsername(request: Request) {
 	await requireAnonymous(request)
@@ -98,7 +89,7 @@ export async function action({ request }: DataFunctionArgs) {
 	})
 }
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
 	return [{ title: 'Reset Password | Epic Notes' }]
 }
 

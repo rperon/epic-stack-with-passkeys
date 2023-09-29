@@ -4,7 +4,7 @@ import {
 	json,
 	redirect,
 	type DataFunctionArgs,
-	type V2_MetaFunction,
+	type MetaFunction,
 } from '@remix-run/node'
 import {
 	Form,
@@ -21,10 +21,10 @@ import { requireAnonymous, sessionKey, signup } from '#app/utils/auth.server.ts'
 import { redirectWithConfetti } from '#app/utils/confetti.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
 import { invariant, useIsPending } from '#app/utils/misc.tsx'
-import { sessionStorage } from '#app/utils/session.server.ts'
+import { authSessionStorage } from '#app/utils/session.server.ts'
 import {
 	NameSchema,
-	PasswordSchema,
+	PasswordAndConfirmPasswordSchema,
 	UsernameSchema,
 } from '#app/utils/user-validation.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
@@ -36,8 +36,6 @@ const SignupFormSchema = z
 	.object({
 		username: UsernameSchema,
 		name: NameSchema,
-		password: PasswordSchema,
-		confirmPassword: PasswordSchema,
 		agreeToTermsOfServiceAndPrivacyPolicy: z.boolean({
 			required_error:
 				'You must agree to the terms of service and privacy policy',
@@ -45,15 +43,7 @@ const SignupFormSchema = z
 		remember: z.boolean().optional(),
 		redirectTo: z.string().optional(),
 	})
-	.superRefine(({ confirmPassword, password }, ctx) => {
-		if (confirmPassword !== password) {
-			ctx.addIssue({
-				path: ['confirmPassword'],
-				code: 'custom',
-				message: 'The passwords must match',
-			})
-		}
-	})
+	.and(PasswordAndConfirmPasswordSchema)
 
 async function requireOnboardingEmail(request: Request) {
 	await requireAnonymous(request)
@@ -75,23 +65,26 @@ export async function action({ request }: DataFunctionArgs) {
 	const email = await requireOnboardingEmail(request)
 	const formData = await request.formData()
 	const submission = await parse(formData, {
-		schema: SignupFormSchema.superRefine(async (data, ctx) => {
-			const existingUser = await prisma.user.findUnique({
-				where: { username: data.username },
-				select: { id: true },
-			})
-			if (existingUser) {
-				ctx.addIssue({
-					path: ['username'],
-					code: z.ZodIssueCode.custom,
-					message: 'A user already exists with this username',
+		schema: intent =>
+			SignupFormSchema.superRefine(async (data, ctx) => {
+				const existingUser = await prisma.user.findUnique({
+					where: { username: data.username },
+					select: { id: true },
 				})
-				return
-			}
-		}).transform(async data => {
-			const session = await signup({ ...data, email })
-			return { ...data, session }
-		}),
+				if (existingUser) {
+					ctx.addIssue({
+						path: ['username'],
+						code: z.ZodIssueCode.custom,
+						message: 'A user already exists with this username',
+					})
+					return
+				}
+			}).transform(async data => {
+				if (intent !== 'submit') return { ...data, session: null }
+
+				const session = await signup({ ...data, email })
+				return { ...data, session }
+			}),
 		async: true,
 	})
 
@@ -104,15 +97,15 @@ export async function action({ request }: DataFunctionArgs) {
 
 	const { session, remember, redirectTo } = submission.value
 
-	const cookieSession = await sessionStorage.getSession(
+	const authSession = await authSessionStorage.getSession(
 		request.headers.get('cookie'),
 	)
-	cookieSession.set(sessionKey, session.id)
+	authSession.set(sessionKey, session.id)
 	const verifySession = await verifySessionStorage.getSession()
 	const headers = new Headers()
 	headers.append(
 		'set-cookie',
-		await sessionStorage.commitSession(cookieSession, {
+		await authSessionStorage.commitSession(authSession, {
 			expires: remember ? session.expirationDate : undefined,
 		}),
 	)
@@ -135,7 +128,7 @@ export async function handleVerification({ submission }: VerifyFunctionArgs) {
 	})
 }
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
 	return [{ title: 'Setup Epic Notes Account' }]
 }
 

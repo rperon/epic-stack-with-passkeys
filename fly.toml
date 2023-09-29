@@ -1,4 +1,4 @@
-app = "epic-stack-with-passkeys-df1e"
+app = "--epic-stack-8c9b"
 primary_region = "sjc"
 kill_signal = "SIGINT"
 kill_timeout = 5

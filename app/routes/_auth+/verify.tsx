@@ -18,6 +18,7 @@ import { twoFAVerificationType } from '#app/routes/settings+/profile.two-factor.
 import { type twoFAVerifyVerificationType } from '#app/routes/settings+/profile.two-factor.verify.tsx'
 import { requireUserId } from '#app/utils/auth.server.ts'
 import { prisma } from '#app/utils/db.server.ts'
+import { ensurePrimary } from '#app/utils/litefs.server.ts'
 import { getDomainUrl, useIsPending } from '#app/utils/misc.tsx'
 import { redirectWithToast } from '#app/utils/toast.server.ts'
 import {
@@ -51,8 +52,8 @@ export async function loader({ request }: DataFunctionArgs) {
 			status: 'idle',
 			submission: {
 				intent: '',
-				payload: Object.fromEntries(params),
-				error: {},
+				payload: Object.fromEntries(params) as Record<string, unknown>,
+				error: {} as Record<string, Array<string>>,
 			},
 		} as const)
 	}
@@ -176,22 +177,21 @@ async function validateRequest(
 	body: URLSearchParams | FormData,
 ) {
 	const submission = await parse(body, {
-		schema: () =>
-			VerifySchema.superRefine(async (data, ctx) => {
-				const codeIsValid = await isCodeValid({
-					code: data[codeQueryParam],
-					type: data[typeQueryParam],
-					target: data[targetQueryParam],
+		schema: VerifySchema.superRefine(async (data, ctx) => {
+			const codeIsValid = await isCodeValid({
+				code: data[codeQueryParam],
+				type: data[typeQueryParam],
+				target: data[targetQueryParam],
+			})
+			if (!codeIsValid) {
+				ctx.addIssue({
+					path: ['code'],
+					code: z.ZodIssueCode.custom,
+					message: `Invalid code`,
 				})
-				if (!codeIsValid) {
-					ctx.addIssue({
-						path: ['code'],
-						code: z.ZodIssueCode.custom,
-						message: `Invalid code`,
-					})
-					return
-				}
-			}),
+				return
+			}
+		}),
 		async: true,
 	})
 
@@ -201,6 +201,10 @@ async function validateRequest(
 	if (!submission.value) {
 		return json({ status: 'error', submission } as const, { status: 400 })
 	}
+
+	// this code path could be part of a loader (GET request), so we need to make
+	// sure we're running on primary because we're about to make writes.
+	await ensurePrimary()
 
 	const { value: submissionValue } = submission
 

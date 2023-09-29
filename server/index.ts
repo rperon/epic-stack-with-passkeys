@@ -11,9 +11,8 @@ import {
 	type ServerBuild,
 } from '@remix-run/node'
 import { wrapExpressCreateRequestHandler } from '@sentry/remix'
-import address from 'address'
+import { ip as ipAddress } from 'address'
 import chalk from 'chalk'
-import chokidar from 'chokidar'
 import closeWithGrace from 'close-with-grace'
 import compression from 'compression'
 import express from 'express'
@@ -21,10 +20,6 @@ import rateLimit from 'express-rate-limit'
 import getPort, { portNumbers } from 'get-port'
 import helmet from 'helmet'
 import morgan from 'morgan'
-
-// @ts-ignore - this file may not exist if you haven't built yet, but it will
-// definitely exist by the time the dev or prod server actually runs.
-import * as remixBuild from '#build/index.js'
 
 installGlobals()
 
@@ -35,14 +30,22 @@ const createRequestHandler = wrapExpressCreateRequestHandler(
 )
 
 const BUILD_PATH = '../build/index.js'
+const WATCH_PATH = '../build/version.txt'
 
-const build = remixBuild as unknown as ServerBuild
+/**
+ * Initial build
+ * @type {ServerBuild}
+ */
+const build = await import(BUILD_PATH)
 let devBuild = build
 
 const app = express()
 
 const getHost = (req: { get: (key: string) => string | undefined }) =>
 	req.get('X-Forwarded-Host') ?? req.get('host') ?? ''
+
+// fly is our proxy
+app.set('trust proxy', true)
 
 // ensure HTTPS only (X-Forwarded-Proto comes from Fly)
 app.use((req, res, next) => {
@@ -147,6 +150,9 @@ const rateLimitDefault = {
 	max: 1000 * maxMultiple,
 	standardHeaders: true,
 	legacyHeaders: false,
+	// Fly.io prevents spoofing of X-Forwarded-For
+	// so no need to validate the trustProxy config
+	validate: { trustProxy: false },
 }
 
 const strongestRateLimit = rateLimit({
@@ -228,7 +234,7 @@ const server = app.listen(portToUse, () => {
 	console.log(`🚀  We have liftoff!`)
 	const localUrl = `http://localhost:${portUsed}`
 	let lanUrl: string | null = null
-	const localIp = address.ip()
+	const localIp = ipAddress() ?? 'Unknown'
 	// Check if the address is a private ip
 	// https://en.wikipedia.org/wiki/Private_network#Private_IPv4_address_spaces
 	// https://github.com/facebook/create-react-app/blob/d960b9e38c062584ff6cfb1a70e1512509a966e7/packages/react-dev-utils/WebpackDevServerUtils.js#LL48C9-L54C10
@@ -262,8 +268,14 @@ if (MODE === 'development') {
 		broadcastDevReady(devBuild)
 	}
 
+	// We'll import chokidar here so doesn't get bundled in production.
+	const chokidar = await import('chokidar')
+
 	const dirname = path.dirname(fileURLToPath(import.meta.url))
-	const watchPath = path.join(dirname, BUILD_PATH).replace(/\\/g, '/')
-	const watcher = chokidar.watch(watchPath, { ignoreInitial: true })
-	watcher.on('all', reloadBuild)
+	const watchPath = path.join(dirname, WATCH_PATH).replace(/\\/g, '/')
+
+	chokidar
+		.watch(watchPath, { ignoreInitial: true })
+		.on('add', reloadBuild)
+		.on('change', reloadBuild)
 }

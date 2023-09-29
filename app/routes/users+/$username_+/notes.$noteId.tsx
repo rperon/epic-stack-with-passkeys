@@ -1,12 +1,12 @@
 import { useForm } from '@conform-to/react'
-import { getFieldsetConstraint, parse } from '@conform-to/zod'
+import { parse } from '@conform-to/zod'
 import { json, type DataFunctionArgs } from '@remix-run/node'
 import {
 	Form,
 	Link,
 	useActionData,
 	useLoaderData,
-	type V2_MetaFunction,
+	type MetaFunction,
 } from '@remix-run/react'
 import { formatDistanceToNow } from 'date-fns'
 import { z } from 'zod'
@@ -164,10 +164,6 @@ export function DeleteNote({ id }: { id: string }) {
 	const [form] = useForm({
 		id: 'delete-note',
 		lastSubmission: actionData?.submission,
-		constraint: getFieldsetConstraint(DeleteFormSchema),
-		onValidate({ formData }) {
-			return parse(formData, { schema: DeleteFormSchema })
-		},
 	})
 
 	return (
@@ -191,7 +187,7 @@ export function DeleteNote({ id }: { id: string }) {
 	)
 }
 
-export const meta: V2_MetaFunction<
+export const meta: MetaFunction<
 	typeof loader,
 	{ 'routes/users+/$username_+/notes': typeof notesLoader }
 > = ({ data, params, matches }) => {

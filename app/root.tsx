@@ -6,7 +6,7 @@ import {
 	type DataFunctionArgs,
 	type HeadersFunction,
 	type LinksFunction,
-	type V2_MetaFunction,
+	type MetaFunction,
 } from '@remix-run/node'
 import {
 	Form,
@@ -29,6 +29,7 @@ import { z } from 'zod'
 import { Confetti } from './components/confetti.tsx'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { ErrorList } from './components/forms.tsx'
+import { EpicProgress } from './components/progess-bar.tsx'
 import { SearchBar } from './components/search-bar.tsx'
 import { EpicToaster } from './components/toaster.tsx'
 import { Button } from './components/ui/button.tsx'
@@ -40,19 +41,14 @@ import {
 	DropdownMenuTrigger,
 } from './components/ui/dropdown-menu.tsx'
 import { Icon, href as iconsHref } from './components/ui/icon.tsx'
-import fontStylestylesheetUrl from './styles/font.css'
-import tailwindStylesheetUrl from './styles/tailwind.css'
+import fontStyleSheetUrl from './styles/font.css'
+import tailwindStyleSheetUrl from './styles/tailwind.css'
 import { authenticator, getUserId } from './utils/auth.server.ts'
 import { ClientHintCheck, getHints, useHints } from './utils/client-hints.tsx'
 import { getConfetti } from './utils/confetti.server.ts'
 import { prisma } from './utils/db.server.ts'
 import { getEnv } from './utils/env.server.ts'
-import {
-	combineHeaders,
-	getDomainUrl,
-	getUserImgSrc,
-	invariantResponse,
-} from './utils/misc.tsx'
+import { combineHeaders, getDomainUrl, getUserImgSrc } from './utils/misc.tsx'
 import { useNonce } from './utils/nonce-provider.ts'
 import { useRequestInfo } from './utils/request-info.ts'
 import { type Theme, setTheme, getTheme } from './utils/theme.server.ts'
@@ -65,8 +61,8 @@ export const links: LinksFunction = () => {
 		// Preload svg sprite as a resource to avoid render blocking
 		{ rel: 'preload', href: iconsHref, as: 'image' },
 		// Preload CSS as a resource to avoid render blocking
-		{ rel: 'preload', href: fontStylestylesheetUrl, as: 'style' },
-		{ rel: 'preload', href: tailwindStylesheetUrl, as: 'style' },
+		{ rel: 'preload', href: fontStyleSheetUrl, as: 'style' },
+		{ rel: 'preload', href: tailwindStyleSheetUrl, as: 'style' },
 		cssBundleHref ? { rel: 'preload', href: cssBundleHref, as: 'style' } : null,
 		{ rel: 'mask-icon', href: '/favicons/mask-icon.svg' },
 		{
@@ -82,13 +78,13 @@ export const links: LinksFunction = () => {
 		} as const, // necessary to make typescript happy
 		//These should match the css preloads above to avoid css as render blocking resource
 		{ rel: 'icon', type: 'image/svg+xml', href: '/favicons/favicon.svg' },
-		{ rel: 'stylesheet', href: fontStylestylesheetUrl },
-		{ rel: 'stylesheet', href: tailwindStylesheetUrl },
+		{ rel: 'stylesheet', href: fontStyleSheetUrl },
+		{ rel: 'stylesheet', href: tailwindStyleSheetUrl },
 		cssBundleHref ? { rel: 'stylesheet', href: cssBundleHref } : null,
 	].filter(Boolean)
 }
 
-export const meta: V2_MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
 	return [
 		{ title: data ? 'Epic Notes' : 'Error | Epic Notes' },
 		{ name: 'description', content: `Your own captain's log` },
@@ -173,16 +169,11 @@ const ThemeFormSchema = z.object({
 
 export async function action({ request }: DataFunctionArgs) {
 	const formData = await request.formData()
-	invariantResponse(
-		formData.get('intent') === 'update-theme',
-		'Invalid intent',
-		{ status: 400 },
-	)
 	const submission = parse(formData, {
 		schema: ThemeFormSchema,
 	})
 	if (submission.intent !== 'submit') {
-		return json({ status: 'success', submission } as const)
+		return json({ status: 'idle', submission } as const)
 	}
 	if (!submission.value) {
 		return json({ status: 'error', submission } as const, { status: 400 })
@@ -279,6 +270,7 @@ function App() {
 			</div>
 			<Confetti id={data.confettiId} />
 			<EpicToaster toast={data.toast} />
+			<EpicProgress />
 		</Document>
 	)
 }
@@ -365,10 +357,7 @@ export function useTheme() {
  */
 export function useOptimisticThemeMode() {
 	const fetchers = useFetchers()
-
-	const themeFetcher = fetchers.find(
-		f => f.formData?.get('intent') === 'update-theme',
-	)
+	const themeFetcher = fetchers.find(f => f.formAction === '/')
 
 	if (themeFetcher && themeFetcher.formData) {
 		const submission = parse(themeFetcher.formData, {
@@ -384,9 +373,6 @@ function ThemeSwitch({ userPreference }: { userPreference?: Theme | null }) {
 	const [form] = useForm({
 		id: 'theme-switch',
 		lastSubmission: fetcher.data?.submission,
-		onValidate({ formData }) {
-			return parse(formData, { schema: ThemeFormSchema })
-		},
 	})
 
 	const optimisticMode = useOptimisticThemeMode()
@@ -416,8 +402,6 @@ function ThemeSwitch({ userPreference }: { userPreference?: Theme | null }) {
 			<input type="hidden" name="theme" value={nextMode} />
 			<div className="flex gap-2">
 				<button
-					name="intent"
-					value="update-theme"
 					type="submit"
 					className="flex h-8 w-8 cursor-pointer items-center justify-center"
 				>

@@ -5,7 +5,7 @@ import {
 	json,
 	redirect,
 	type DataFunctionArgs,
-	type V2_MetaFunction,
+	type MetaFunction,
 } from '@remix-run/node'
 import { Form, useActionData, useSearchParams } from '@remix-run/react'
 import { z } from 'zod'
@@ -100,7 +100,7 @@ export function SignupEmail({
 	)
 }
 
-export const meta: V2_MetaFunction = () => {
+export const meta: MetaFunction = () => {
 	return [{ title: 'Sign Up | Epic Notes' }]
 }
 
@@ -149,16 +149,17 @@ export default function SignupRoute() {
 						Submit
 					</StatusButton>
 				</Form>
-				<div className="mt-5 flex flex-col gap-5 border-b-2 border-t-2 border-border py-3">
+				<ul className="mt-5 flex flex-col gap-5 border-b-2 border-t-2 border-border py-3">
 					{providerNames.map(providerName => (
-						<ProviderConnectionForm
-							key={providerName}
-							type="Signup"
-							providerName={providerName}
-							redirectTo={redirectTo}
-						/>
+						<li key={providerName}>
+							<ProviderConnectionForm
+								type="Signup"
+								providerName={providerName}
+								redirectTo={redirectTo}
+							/>
+						</li>
 					))}
-				</div>
+				</ul>
 			</div>
 		</div>
 	)
