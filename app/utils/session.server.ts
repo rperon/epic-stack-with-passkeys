@@ -1,4 +1,9 @@
 import { createCookieSessionStorage } from '@remix-run/node'
+import { prisma } from './db.server.ts'
+import { getSessionExpirationDate } from './auth.server.ts'
+import { handleNewSession } from '#app/routes/_auth+/login.tsx'
+import { combineHeaders } from './misc.tsx'
+import { destroyRedirectToHeader } from './redirect-cookie.server.ts'
 
 export const authSessionStorage = createCookieSessionStorage({
 	cookie: {
@@ -36,3 +41,27 @@ Object.defineProperty(authSessionStorage, 'commitSession', {
 		return setCookieHeader
 	},
 })
+
+export const destroyRedirectTo = { 'set-cookie': destroyRedirectToHeader }
+
+export async function makeSession(
+	{
+		request,
+		userId,
+		redirectTo,
+	}: { request: Request; userId: string; redirectTo?: string | null },
+	responseInit?: ResponseInit,
+) {
+	redirectTo ??= '/'
+	const session = await prisma.session.create({
+		select: { id: true, expirationDate: true, userId: true },
+		data: {
+			expirationDate: getSessionExpirationDate(),
+			userId,
+		},
+	})
+	return handleNewSession(
+		{ request, session, redirectTo, remember: true },
+		{ headers: combineHeaders(responseInit?.headers, destroyRedirectTo) },
+	)
+}

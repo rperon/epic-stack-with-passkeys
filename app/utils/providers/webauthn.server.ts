@@ -1,6 +1,7 @@
 import { type Authenticator } from '@prisma/client'
 import { type WebAuthnOptions, WebAuthnStrategy } from 'remix-auth-webauthn'
 import { prisma } from '../db.server.ts'
+import { getDomainUrl } from '../misc.tsx'
 import { type ProviderUser, type AuthProvider } from './provider.ts'
 
 // const shouldMock = process.env.WEB_AUTHN_ORIGIN.startsWith('MOCK_')
@@ -10,11 +11,8 @@ export class WebAuthnProvider implements AuthProvider {
 		return new WebAuthnStrategy<ProviderUser>(
 			{
 				rpName: 'Epic Stack WebAuthn Example',
-				rpID:
-					process.env.NODE_ENV === 'development'
-						? 'localhost'
-						: process.env.WEB_AUTHN_ORIGIN,
-				origin: process.env.WEB_AUTHN_ORIGIN,
+				rpID: process.env.NODE_ENV === 'development' ? 'localhost' : request => getDomainUrl(request),
+				origin: request => getDomainUrl(request),
 
 				getUserAuthenticators: async user => {
 					const authenticators = await prisma.authenticator.findMany({

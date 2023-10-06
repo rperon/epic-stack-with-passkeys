@@ -90,7 +90,7 @@
     "remix-auth": "^3.5.1",
     "remix-auth-form": "^1.3.0",
     "remix-auth-github": "^1.6.0",
-    "remix-auth-webauthn": "^0.0.8",
+    "remix-auth-webauthn": "^0.0.11",
     "remix-utils": "^6.6.0",
     "set-cookie-parser": "^2.6.0",
     "sonner": "^1.0.3",

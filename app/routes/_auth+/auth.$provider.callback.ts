@@ -1,29 +1,26 @@
 import { redirect, type DataFunctionArgs } from '@remix-run/node'
 import {
 	authenticator,
-	getSessionExpirationDate,
 	getUserId,
 } from '#app/utils/auth.server.ts'
 import { ProviderNameSchema, providerLabels } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
 import { combineHeaders } from '#app/utils/misc.tsx'
 import {
-	destroyRedirectToHeader,
 	getRedirectCookieValue,
 } from '#app/utils/redirect-cookie.server.ts'
+import { destroyRedirectTo, makeSession } from '#app/utils/session.server.ts'
 import {
 	createToastHeaders,
 	redirectWithToast,
 } from '#app/utils/toast.server.ts'
 import { verifySessionStorage } from '#app/utils/verification.server.ts'
-import { handleNewSession } from './login.tsx'
 import {
 	onboardingEmailSessionKey,
 	prefilledProfileKey,
 	providerIdKey,
 } from './onboarding_.$provider.tsx'
 
-const destroyRedirectTo = { 'set-cookie': destroyRedirectToHeader }
 
 export async function loader({ request, params }: DataFunctionArgs) {
 	const providerName = ProviderNameSchema.parse(params.provider)
@@ -154,26 +151,4 @@ export async function loader({ request, params }: DataFunctionArgs) {
 			destroyRedirectTo,
 		),
 	})
-}
-
-async function makeSession(
-	{
-		request,
-		userId,
-		redirectTo,
-	}: { request: Request; userId: string; redirectTo?: string | null },
-	responseInit?: ResponseInit,
-) {
-	redirectTo ??= '/'
-	const session = await prisma.session.create({
-		select: { id: true, expirationDate: true, userId: true },
-		data: {
-			expirationDate: getSessionExpirationDate(),
-			userId,
-		},
-	})
-	return handleNewSession(
-		{ request, session, redirectTo, remember: true },
-		{ headers: combineHeaders(responseInit?.headers, destroyRedirectTo) },
-	)
 }
