@@ -1,9 +1,4 @@
 import { createCookieSessionStorage } from '@remix-run/node'
-import { handleNewSession } from '#app/routes/_auth+/login.tsx'
-import { getSessionExpirationDate } from './auth.server.ts'
-import { prisma } from './db.server.ts'
-import { combineHeaders } from './misc.tsx'
-import { destroyRedirectToHeader } from './redirect-cookie.server.ts'
 
 export const authSessionStorage = createCookieSessionStorage({
 	cookie: {
