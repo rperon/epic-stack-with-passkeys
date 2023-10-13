@@ -14,6 +14,7 @@ import { ErrorList, Field } from '#app/components/forms.tsx'
 import { StatusButton } from '#app/components/ui/status-button.tsx'
 import {
 	ProviderConnectionForm,
+	WEBAUTHN_PROVIDER_NAME,
 	providerNames,
 } from '#app/utils/connections.tsx'
 import { prisma } from '#app/utils/db.server.ts'
@@ -150,7 +151,7 @@ export default function SignupRoute() {
 					</StatusButton>
 				</Form>
 				<ul className="mt-5 flex flex-col gap-5 border-b-2 border-t-2 border-border py-3">
-					{providerNames.map(providerName => (
+					{providerNames.filter(p => p !== WEBAUTHN_PROVIDER_NAME).map(providerName => (
 						<li key={providerName}>
 							<ProviderConnectionForm
 								type="Signup"

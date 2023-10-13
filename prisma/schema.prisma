@@ -25,6 +25,28 @@ model User {
   roles       Role[]
   sessions    Session[]
   connections Connection[]
+
+  authenticators Authenticator[]
+}
+
+model Authenticator {
+  // SQL: Encode to base64url then store as `TEXT` or a large `VARCHAR(511)`. Index this column
+  credentialID         String  @id
+  // Some reference to the user object. Consider indexing this column too
+  userId               String
+  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  // SQL: Encode to base64url and store as `TEXT`
+  credentialPublicKey  String
+  // SQL: Consider `BIGINT` since some authenticators return atomic timestamps as counters
+  counter              BigInt
+  // SQL: `VARCHAR(32)` or similar, longest possible value is currently 12 characters
+  // Ex: 'singleDevice' | 'multiDevice'
+  credentialDeviceType String
+  // SQL: `BOOL` or whatever similar type is supported
+  credentialBackedUp   Boolean
+  // SQL: `VARCHAR(255)` and store String array or a CSV String
+  // Ex: ['usb' | 'ble' | 'nfc' | 'internal']
+  transports           String
 }
 
 model Note {
