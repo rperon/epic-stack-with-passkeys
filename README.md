@@ -10,7 +10,7 @@ and [remix-auth](https://github.com/sergiodxa/remix-auth) with the
 This example show you how you can create a new account with a passkey and login
 to your account with a passkey.
 
-To check out the changes, check [the git commit history](). The important parts
+To check out the changes, check [the git commit history](https://github.com/rperon/epic-stack-with-passkeys/commit/e2da71f26db28cf7a9f59a57b716667e0b952bfd). The important parts
 are:
 
 1. Creation of a new model called Authenticator. It will contain the required
