@@ -20,6 +20,7 @@ export type IconName =
 	| 'lock-open-1'
 	| 'magnifying-glass'
 	| 'moon'
+	| 'passkey'
 	| 'pencil-1'
 	| 'pencil-2'
 	| 'plus'
