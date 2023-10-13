@@ -1,54 +1,88 @@
-<div align="center">
-  <h1 align="center"><a href="https://www.epicweb.dev/epic-stack">The Epic Stack 🚀</a></h1>
-  <strong align="center">
-    Ditch analysis paralysis and start shipping Epic Web apps.
-  </strong>
-  <p>
-    This is an opinionated project starter and reference that allows teams to
-    ship their ideas to production faster and on a more stable foundation based
-    on the experience of <a href="https://kentcdodds.com">Kent C. Dodds</a> and
-    <a href="https://github.com/epicweb-dev/epic-stack/graphs/contributors">contributors</a>.
-  </p>
-</div>
+# [Epic Stack](https://github.com/epicweb-dev/epic-stack) with [remix-auth-webauthn](https://github.com/alexanderson1993/remix-auth-webauthn) and [remix-auth](https://github.com/sergiodxa/remix-auth)
 
-```sh
-npx create-remix@latest --install --init-script --git-init --template epicweb-dev/epic-stack
-```
+// TODO : Screenshot with passkey
 
-[![The Epic Stack](https://github-production-user-asset-6210df.s3.amazonaws.com/1500684/246885449-1b00286c-aa3d-44b2-9ef2-04f694eb3592.png)](https://www.epicweb.dev/epic-stack)
+This demonstrates how to use
+[remix-auth-webauthn](https://github.com/alexanderson1993/remix-auth-webauthn)
+and [remix-auth](https://github.com/sergiodxa/remix-auth) with the
+[Epic Stack](https://github.com/epicweb-dev/epic-stack).
 
-[The Epic Stack](https://www.epicweb.dev/epic-stack)
+This example show you how you can create a new account with a passkey and login
+to your account with a passkey.
 
-<hr />
+To check out the changes, check [the git commit history](). The important parts
+are:
 
-## Watch Kent's Introduction to The Epic Stack
+1. Creation of a new model called Authenticator. It will contain the required
+   information to retrieve the passkey. `prisma/scheam.prisma`
 
-[![screenshot of a YouTube video](https://github-production-user-asset-6210df.s3.amazonaws.com/1500684/242088051-6beafa78-41c6-47e1-b999-08d3d3e5cb57.png)](https://www.youtube.com/watch?v=yMK5SVRASxM)
+2. Creation of a new provider called `webauthn.server.ts`. This provider
+   implements the WebAuthnStrategy from `remix-auth-webauthn`. The most
+   important part is in the `verify` function. This function is used to register
+   a new passkey and to authenticate an existing passkey. Upon registration, we
+   create a new `Authenticator` entry in the database and link it to the user.
 
-["The Epic Stack" by Kent C. Dodds at #RemixConf 2023 💿](https://www.youtube.com/watch?v=yMK5SVRASxM)
+3. The onboarding process is a little bit different with `passkey` and has to be
+   modify. The start of the onboarding is the same as before, you verify your
+   email and then you access the onboarding routes where you can create your
+   account.
 
-## Docs
+   To register your passkey, i added a link to a new page called
+   `routes/_auth+/onboarding_.passkey.tsx`, the user can switch from using a
+   password or a passkey.
 
-[Read the docs](https://github.com/epicweb-dev/epic-stack/blob/main/docs)
-(please 🙏).
+   The loader for this file is a little bit complicated, we first have to call
 
-## Support
+   ```ts
+   await authenticator.authenticate(WEBAUTHN_PROVIDER_NAME, request)
+   ```
 
-- 🆘 Join the
-  [discussion on GitHub](https://github.com/epicweb-dev/epic-stack/discussions)
-  and the [KCD Community on Discord](https://kcd.im/discord).
-- 💡 Create an
-  [idea discussion](https://github.com/epicweb-dev/epic-stack/discussions/new?category=ideas)
-  for suggestions.
-- 🐛 Open a [GitHub issue](https://github.com/epicweb-dev/epic-stack/issues) to
-  report a bug.
+   But this call will throw and we need to catch it. It will contain a Response
+   object of the following type `WebAuthnOptionsResponse`. Those information are
+   required to start the passkey process, so we return them from our loader.
+   (line 71 to 85)
 
-## Branding
+   In the user interface, we are going to use that data when the user submit the
+   form with its username and name. If the formData is valid (for example the
+   username is available), then on the onSubmit event we will call a function
+   named `handleFormSubmit` from `remix-auth-webauthn` like this :
 
-Want to talk about the Epic Stack in a blog post or talk? Great! Here are some
-assets you can use in your material:
-[EpicWeb.dev/brand](https://epicweb.dev/brand)
+   ```ts
+   const [form, fields] = useForm({
+   	...
+   	onValidate({ formData }) {
+   		const result = parse(formData, { schema: SignupPasskeyFormSchema })
+   		return result
+   	},
+   	onSubmit(event) {
+   		handleFormSubmit(data, 'registration')(event)
+   	},
+   	shouldRevalidate: 'onBlur',
+   })
+   ```
 
-## Thanks
+   The `handleFormSubmit` will trigger the passkey process and upon success
+   register your user.
 
-You rock 🪨
+   To finish the process, we need to save all the important part in the
+   database.
+
+   In the `action` function if the form is valid we create a new session with
+   the function `signupWithWebauthn` (see `app/utils/auth.server.ts`) and then
+   call `authenticator.authenticate()`.
+
+4. The login process is very similar to the previous one. The `loader` is very
+   similar with the one for registration.
+
+   To start the authentication process, we are re-using the
+   `ProviderConnectionForm` which create a login button for each connection.
+   Like for the registration, we need to use `handleFormSubmit` from
+   `remix-auth-webauthn` when we submit the form. The `action` for this form is
+   located in the route `auth.passkey.ts` where we will call
+   `authenticator.authenticate()`.
+
+This example is following the readme of
+[remix-auth-webauthn](https://github.com/alexanderson1993/remix-auth-webauthn).
+
+Thanks to [alexanderson1993](https://github.com/alexanderson1993) and
+[kentcdodds](https://github.com/kentcdodds) for the help.
