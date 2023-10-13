@@ -1,6 +1,6 @@
 # [Epic Stack](https://github.com/epicweb-dev/epic-stack) with [remix-auth-webauthn](https://github.com/alexanderson1993/remix-auth-webauthn) and [remix-auth](https://github.com/sergiodxa/remix-auth)
 
-// TODO : Screenshot with passkey
+<img width="1286" alt="Screenshot epic stack with passkey" src="passkey.png">
 
 This demonstrates how to use
 [remix-auth-webauthn](https://github.com/alexanderson1993/remix-auth-webauthn)
